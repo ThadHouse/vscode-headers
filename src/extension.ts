@@ -7,8 +7,17 @@ import * as path from 'path';
 import * as os from 'os';
 import { RelativePattern } from 'vscode';
 import * as glob from 'glob';
+import * as jsonc from 'jsonc-parser';
 
 function getConfigIndexForPlatform(configurations: any): number {
+    let config = vscode.workspace.getConfiguration("vscppheaders");
+
+    let index = config.get<number>("selectConfigIndex");
+
+    if (index >= 0 && index < configurations.length) {
+        return index;
+    }
+
     if (configurations.length > 3) {
         return configurations.length - 1; // Default to the last custom configuration.
     }
@@ -54,7 +63,7 @@ function getFilesInDirectory(root: string) : Promise<string[]> {
             } else {
                 resolve(result);
             }
-        })
+        });
     });
 }
 
@@ -62,76 +71,100 @@ function getFilesInDirectory(root: string) : Promise<string[]> {
 // your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
 
-    // Use the console to output diagnostic information (console.log) and errors (console.error)
-    // This line of code will only be executed once when your extension is activated
-    console.log('Congratulations, your extension "vscode-headers" is now active!');
+    let headers = new VsCodeHeaders();
 
-    vscode.languages.registerCompletionItemProvider('cpp', {
+    await headers.loadHeaders();
 
-        async provideCompletionItems(document, position, token) {
-            // Open VsCode file
-            let folders = vscode.workspace.workspaceFolders;
-            if (folders === undefined) {
-                return null;
-            }
+    let reloadCommand = vscode.commands.registerCommand('vscppheaders.reloadHeaders', async () => {
+        await headers.loadHeaders();
+    });
 
+    let vscodeFileUpdatedWatcher = vscode.workspace.createFileSystemWatcher("**/c_cpp_properties.json");
+
+    vscodeFileUpdatedWatcher.onDidChange(async () => {
+        await headers.loadHeaders();
+    })
+
+    let filesUpdatedWatcher = vscode.workspace.createFileSystemWatcher("**/*.{h, hpp, hh}", false, true, false);
+    filesUpdatedWatcher.onDidCreate(async (f) => {
+        await headers.loadHeaders();
+    });
+
+    filesUpdatedWatcher.onDidDelete(async (f) => {
+        await headers.loadHeaders();
+    });
+
+    let disposable = vscode.languages.registerCompletionItemProvider(['cpp', 'c'], {
+
+        provideCompletionItems(document, position, token) {
             if (document.lineAt(position.line).text.indexOf("#include") === -1) {
                 return null;
             }
 
-            let cppFilesLarge = await Promise.all(folders.map(async wp => {
-                let relPatern = new RelativePattern(wp, "**/c_cpp_properties.json");
-                let files = await vscode.workspace.findFiles(relPatern);
-                if (files.length < 1) {
-                    return Array<string>();
-                }
-
-                let retVals : string[] = new Array<string>();
-
-                // TODO: Figure out current config
-
-                for (let file of files) {
-                    let content = await readFileAsync(file.fsPath);
-                    let parsed = JSON.parse(content);
-                    let configNum = getConfigIndexForPlatform(parsed.configurations);
-                    let config = parsed.configurations[configNum];
-                    for (let path of config.includePath) {
-                        let newPath : string = path.replace("${workspaceRoot}", wp.uri.fsPath);
-                        retVals.push(newPath);
-                    }
-                }
-
-                return retVals;
-            }));
-
-            var paths : string[] = [].concat.apply([], cppFilesLarge);
-
-            let args : vscode.CompletionItem[] = new Array<vscode.CompletionItem>();
-            for (let p of paths) {
-                let newPath = path.normalize(p);
-                var dirs = await getFilesInDirectory(newPath);
-                for (let d of dirs) {
-                    //console.log(d);
-                    args.push(new vscode.CompletionItem(d) );
-                }
-            }
-            return args;
+            return headers.getHeaders();
         }
     }, "<", "\"");
 
-    // The command has been defined in the package.json file
-    // Now provide the implementation of the command with  registerCommand
-    // The commandId parameter must match the command field in package.json
-    let disposable = vscode.commands.registerCommand('extension.sayHello', () => {
-        // The code you place here will be executed every time your command is executed
-
-        // Display a message box to the user
-        vscode.window.showInformationMessage('Hello World!');
-    });
+    context.subscriptions.push(headers);
 
     context.subscriptions.push(disposable);
+
+    context.subscriptions.push(reloadCommand);
+
+    context.subscriptions.push(filesUpdatedWatcher);
+    context.subscriptions.push(vscodeFileUpdatedWatcher);
 }
 
 // this method is called when your extension is deactivated
 export function deactivate() {
+}
+
+class VsCodeHeaders {
+    private headerFiles : string[] = new Array<string>();
+
+    public getHeaders() : vscode.CompletionItem[] {
+        let locs = new Array<vscode.CompletionItem>();
+        for (let p of this.headerFiles) {
+            locs.push(new vscode.CompletionItem(p));
+        }
+        return locs;
+    }
+
+    public async loadHeaders() {
+        let folders = vscode.workspace.workspaceFolders;
+        if (folders === undefined) {
+            return null;
+        }
+
+        let paths : string[] = new Array<string>();
+
+        await Promise.all(folders.map(async wp => {
+            let relPatern = new RelativePattern(wp, "**/c_cpp_properties.json");
+            let files = await vscode.workspace.findFiles(relPatern);
+            if (files.length < 1) {
+                return;
+            }
+
+            for (let file of files) {
+                let content = await readFileAsync(file.fsPath);
+                let parsed = jsonc.parse(content);
+                let configNum = getConfigIndexForPlatform(parsed.configurations);
+                let config = parsed.configurations[configNum];
+                for (let pth of config.includePath) {
+                    let newPath : string = pth.replace("${workspaceRoot}", wp.uri.fsPath);
+                    newPath = path.normalize(newPath);
+                    let dirs = await getFilesInDirectory(newPath);
+                    for (let d of dirs) {
+                        paths.push(d);
+                    }
+                }
+            }
+        }));
+
+        this.headerFiles = paths;
+    }
+
+    dispose() {
+
+    }
 }

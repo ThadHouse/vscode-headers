@@ -2,7 +2,7 @@
     "name": "vscode-headers",
     "displayName": "vscode-headers",
     "description": "Adds C and C++ Header Intellisense to VS Code",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "publisher": "thadhouse",
     "engines": {
         "vscode": "^1.20.0"
@@ -11,17 +11,29 @@
         "Other"
     ],
     "activationEvents": [
-        "*"
+        "workspaceContains:.vscode/c_cpp_properties.json"
     ],
-    "main": "./out/extension",
     "contributes": {
+        "configuration": {
+            "type": "object",
+            "title": "vscode cpp headers",
+            "properties": {
+                "vscppheaders.selectConfigIndex": {
+                    "type": "integer",
+                    "default": -1,
+                    "description": "Force the cpp configuration to load"
+                }
+            }
+        },
         "commands": [
             {
-                "command": "extension.sayHello",
-                "title": "Hello World"
+                "command": "vscppheaders.reloadHeaders",
+                "title": "Force a reload of the C++ headers",
+                "category": "cpp"
             }
         ]
     },
+    "main": "./out/extension",
     "scripts": {
         "vscode:prepublish": "npm run compile",
         "compile": "tsc -p ./",
@@ -30,7 +42,7 @@
         "test": "npm run compile && node ./node_modules/vscode/bin/test"
     },
     "devDependencies": {
-        "typescript": "^2.6.1",
+        "typescript": "^2.5.3",
         "vscode": "^1.1.6",
         "tslint": "^5.8.0",
         "@types/node": "^7.0.43",
@@ -40,6 +52,7 @@
         "@types/glob": "^5.0.35",
         "@types/micromatch": "^3.1.0",
         "glob": "^7.1.2",
+        "jsonc-parser": "^1.0.1",
         "micromatch": "^3.1.5"
     }
 }
