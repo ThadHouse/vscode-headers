@@ -57,6 +57,7 @@ function getFilesInDirectory(root: string) : Promise<string[]> {
                 resolve(new Array<string>());
             }
         }
+
         glob("**/*.h", { nomount: true,  cwd: root},  (error: Error | null, result : string[]) => {
             if (error) {
                 reject(error);
@@ -83,7 +84,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     vscodeFileUpdatedWatcher.onDidChange(async () => {
         await headers.loadHeaders();
-    })
+    });
 
     let filesUpdatedWatcher = vscode.workspace.createFileSystemWatcher("**/*.{h, hpp, hh}", false, true, false);
     filesUpdatedWatcher.onDidCreate(async (f) => {
@@ -136,6 +137,10 @@ class VsCodeHeaders {
             return null;
         }
 
+        let config = vscode.workspace.getConfiguration("vscppheaders");
+
+        let onlyWorkspaceHeaders = config.get<boolean>('onlyWorkspaceHeaders');
+
         let paths : string[] = new Array<string>();
 
         await Promise.all(folders.map(async wp => {
@@ -151,6 +156,11 @@ class VsCodeHeaders {
                 let configNum = getConfigIndexForPlatform(parsed.configurations);
                 let config = parsed.configurations[configNum];
                 for (let pth of config.includePath) {
+                    if (onlyWorkspaceHeaders) {
+                        if (pth.indexOf('${workspaceRoot}') === -1) {
+                            continue;
+                        }
+                    }
                     let newPath : string = pth.replace("${workspaceRoot}", wp.uri.fsPath);
                     newPath = path.normalize(newPath);
                     let dirs = await getFilesInDirectory(newPath);

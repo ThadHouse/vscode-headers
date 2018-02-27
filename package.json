@@ -22,6 +22,11 @@
                     "type": "integer",
                     "default": -1,
                     "description": "Force the cpp configuration to load"
+                },
+                "vscppheaders.onlyWorkspaceHeaders" : {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Only parse header locations in the local workspace"
                 }
             }
         },
