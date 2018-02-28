@@ -14,6 +14,10 @@ function getConfigIndexForPlatform(configurations: any): number {
 
     let index = config.get<number>("selectConfigIndex");
 
+    if (index === undefined) {
+        index = -1;
+    }
+
     if (index >= 0 && index < configurations.length) {
         return index;
     }
@@ -87,17 +91,17 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     let filesUpdatedWatcher = vscode.workspace.createFileSystemWatcher("**/*.{h, hpp, hh}", false, true, false);
-    filesUpdatedWatcher.onDidCreate(async (f) => {
+    filesUpdatedWatcher.onDidCreate(async () => {
         await headers.loadHeaders();
     });
 
-    filesUpdatedWatcher.onDidDelete(async (f) => {
+    filesUpdatedWatcher.onDidDelete(async () => {
         await headers.loadHeaders();
     });
 
     let disposable = vscode.languages.registerCompletionItemProvider(['cpp', 'c'], {
 
-        provideCompletionItems(document, position, token) {
+        provideCompletionItems(document, position) {
             if (document.lineAt(position.line).text.indexOf("#include") === -1) {
                 return null;
             }
@@ -131,10 +135,10 @@ class VsCodeHeaders {
         return locs;
     }
 
-    public async loadHeaders() {
+    public async loadHeaders() : Promise<void> {
         let folders = vscode.workspace.workspaceFolders;
         if (folders === undefined) {
-            return null;
+            return;
         }
 
         let config = vscode.workspace.getConfiguration("vscppheaders");

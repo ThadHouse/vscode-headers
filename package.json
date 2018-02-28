@@ -2,7 +2,7 @@
     "name": "vscode-headers",
     "displayName": "vscode-headers",
     "description": "Adds C and C++ Header Intellisense to VS Code",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "publisher": "thadhouse",
     "engines": {
         "vscode": "^1.20.0"
